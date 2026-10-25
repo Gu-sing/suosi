@@ -1,12 +1,12 @@
 {
-  "name": "2025-registration",
+  "name": "2026-registration",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "gen": "node scripts/build-data.js",
     "dev": "npm run gen && vite",
-    "build": "npm run gen && vite build --base=/2025-registration/",
+    "build": "npm run gen && vite build --base=/2026-registration/",
     "preview": "vite preview"
   },
   "devDependencies": {

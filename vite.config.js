@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/2025-registration/', 
+  base: '/2026-registration/', 
 });
