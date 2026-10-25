@@ -1,4 +1,4 @@
-# 2025 Fall Registration
+# 2026 Fall Registration
 
 一个社团招新注册墙的物理模拟可视化展示。
 
