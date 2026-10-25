@@ -1,5 +1,18 @@
 [
-   {
+  {
+    "id": "ChaSang",
+    "name": "ChaSang",
+    "bio": "请输入文本(?)",
+    "tags": [
+      "None"
+    ],
+    "social": {
+      "github": "Cha-Sang",
+      "blog": "None"
+    },
+    "avatarUrl": "avatars/ChaSang.png"
+  },
+  {
     "id": "Epi",
     "name": "Epi",
     "bio": "（我要偷偷写小作文）\n 北科计科大三在读，音游体验家，ACG 爱好者，解谜爱好者，超轻度游戏玩家，术力口厨，…。目前现实学习生活比较充实所以可能博客更新的不是很频繁,等年终可能会写一些总结之类的东西。\n Epi [/ˈɛpi/] 这个名字源自于 “Epiphany（顿悟）” 的简写，是不知从某处看来的一个单词，后来因为这个名字有点长于是就简写做了 Epi。在简写后这个名字又兼有了 “Epic” “Epiphyllum”“eπ” 的解读方法，就一直这样子用下去了。\n 然后对解谜感兴趣的欢迎找私戳我加入北科谜协！\n 最后看到 🐧(emoji) 就自动输出 GUGUGAGA (碱基序列) 大家有什么头猪吗",
@@ -72,6 +85,19 @@
     "avatarUrl": "avatars/Radiqal.jpg"
   },
   {
+    "id": "SOVOS",
+    "name": "SOVOS",
+    "bio": "？",
+    "tags": [
+      "啊？"
+    ],
+    "social": {
+      "github": "SOVOS",
+      "blog": "None"
+    },
+    "avatarUrl": "avatars/SOVOS.jpg"
+  },
+  {
     "id": "Siriuns",
     "name": "Siriuns",
     "bio": "🤔🤔🤔",
@@ -85,6 +111,35 @@
       "blog": "https://siriuns.netlify.app/"
     },
     "avatarUrl": "avatars/Siriuns.png"
+  },
+  {
+    "id": "TTTb",
+    "name": "TTTb",
+    "bio": "404 Not Found",
+    "tags": [
+      "LLM",
+      "RL",
+      "AI for Network"
+    ],
+    "social": {
+      "github": "TTTb",
+      "blog": "https://tttb0521.github.io/"
+    },
+    "avatarUrl": "avatars/TTTb.jpg"
+  },
+  {
+    "id": "WhiteD",
+    "name": "WhiteD",
+    "bio": "I made this with AI and all my effort,on a zero base,for nearly 3 hours🥹.",
+    "tags": [
+      "C++",
+      "Unity"
+    ],
+    "social": {
+      "github": "WhiteDeeeeeer",
+      "blog": ""
+    },
+    "avatarUrl": "avatars/WhiteD.jpg"
   },
   {
     "id": "YOO_koishi",
@@ -101,6 +156,21 @@
       "blog": "https://blog.yookoishi.com"
     },
     "avatarUrl": "avatars/YOO_koishi.png"
+  },
+  {
+    "id": "level",
+    "name": "level",
+    "bio": "请输入文本",
+    "tags": [
+      "Linux",
+      "Miku",
+      "烤批"
+    ],
+    "social": {
+      "github": "level0_jj",
+      "blog": "https://yourblog.com"
+    },
+    "avatarUrl": "avatars/level.jpg"
   },
   {
     "id": "molinwu",
@@ -159,5 +229,50 @@
       "blog": "wdlin233.github.io"
     },
     "avatarUrl": "avatars/wdlin.jpg"
+  },
+  {
+    "id": "windy-wanderer",
+    "name": "钦望",
+    "bio": "星垂平野阔，月涌大江流",
+    "tags": [
+      "Python",
+      "Java",
+      "ACG"
+    ],
+    "social": {
+      "github": "windy-wanderer",
+      "blog": "https://github.com/windy-wanderer"
+    },
+    "avatarUrl": "avatars/windy-wanderer.jpg"
+  },
+  {
+    "id": "yufengc",
+    "name": "yufengc",
+    "bio": "我是臭看动漫，臭敲代码的q-q",
+    "tags": [
+      "ACG",
+      "c++",
+      "linux"
+    ],
+    "social": {
+      "github": "yufengc-qwq",
+      "blog": "暂无....."
+    },
+    "avatarUrl": "avatars/yufengc.jpg"
+  },
+  {
+    "id": "zzx",
+    "name": "sad_potato",
+    "bio": "I'm sad_potato but I'm not sad. 🐧",
+    "tags": [
+      "Linux",
+      "Web",
+      "Rust"
+    ],
+    "social": {
+      "github": "yunqi10086",
+      "blog": ""
+    },
+    "avatarUrl": "avatars/zzx.jpg"
   }
 ]

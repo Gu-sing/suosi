@@ -2,6 +2,9 @@ import Matter from 'matter-js';
 
 export function createCustomRenderer(engine, canvas) {
     const ctx = canvas.getContext('2d');
+    const logo = new Image();
+    logo.src = `${import.meta.env.BASE_URL}images/Source.jpg`;
+    logo.onerror = () => console.error(`Failed to load page logo: ${logo.src}`);
     
     // 自适应窗口大小
     const resize = () => {
@@ -17,22 +20,34 @@ export function createCustomRenderer(engine, canvas) {
 
         const width = canvas.width;
         const height = canvas.height;
+        const logoHeight = Math.min(220, height * 0.3);
 
         // 1. 清空背景 (极客黑)
-        ctx.fillStyle = '#111111';
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
+
+        if (logo.complete && logo.naturalWidth > 0) {
+            const logoWidth = logoHeight * logo.naturalWidth / logo.naturalHeight;
+            ctx.drawImage(
+                logo,
+                (width - logoWidth) / 2,
+                (height - logoHeight) / 2 - 100,
+                logoWidth,
+                logoHeight
+            );
+        }
 
         // 绘制背景文字
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fcfaf2'; 
+        ctx.fillStyle = '#04060d'; 
         
         ctx.font = 'bold 50px sans-serif';
-        ctx.fillText('Welcome to Source of USTB', width / 2, height / 2 - 25);
+        ctx.fillText('Welcome to Source of USTB', width / 2, height / 2 + logoHeight / 2);
         
         ctx.font = '27px sans-serif';
-        ctx.fillText('2025 fall registration', width / 2, height / 2 + 35);
+        ctx.fillText('2026 fall registration', width / 2, height / 2 + logoHeight / 2 + 50);
         ctx.restore();
 
         // 2. 获取所有物体
@@ -70,7 +85,7 @@ export function createCustomRenderer(engine, canvas) {
             ctx.restore(); // 恢复剪裁前
 
             // 绘制边框
-            ctx.strokeStyle = '#00ff00';
+            ctx.strokeStyle = '#ff5500';
             ctx.lineWidth = 2;
             ctx.stroke();
 
