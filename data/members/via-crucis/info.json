@@ -1,0 +1,9 @@
+{
+  "name": "via-crucis", 
+  "bio": "该睡觉了",
+  "tags": ["OS", "Rust","Digital logic"], 
+  "social": {
+    "github": "via-crucis462",
+    "blog": "https://yourblog.com"
+  }
+}
