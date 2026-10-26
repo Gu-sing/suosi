@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "gen": "node scripts/build-data.js",
+    "test": "node --test",
     "dev": "npm run gen && vite",
     "build": "npm run gen && vite build --base=/2026-registration/",
     "preview": "vite preview"

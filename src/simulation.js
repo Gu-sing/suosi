@@ -1,84 +1,228 @@
 import Matter from 'matter-js';
 import { createCustomRenderer } from './render.js';
 import { setupInteractions } from './ui.js';
+import { containBody, createWalls, floatLayout, setRadius } from './physics.js';
+import { advanceRace, createRace, destroyRace, layoutRace, reframeCamera } from './race.js';
 
-export async function initSimulation(canvas) {
-    // 1. 基础设置
-    const Engine = Matter.Engine,
-          Runner = Matter.Runner,
-          Composite = Matter.Composite,
-          Bodies = Matter.Bodies;
-
-    const engine = Engine.create();
-    engine.gravity.y = 0; // 无重力，太空漂浮感
-
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    // 2. 创建边界墙 (不可见，但存在)
-    const wallOpts = { isStatic: true, render: { visible: false } };
-    const thick = 100;
-    const walls = [
-        Bodies.rectangle(width/2, -thick, width*2, thick*2, wallOpts), // Top
-        Bodies.rectangle(width/2, height+thick, width*2, thick*2, wallOpts), // Bottom
-        Bodies.rectangle(width+thick, height/2, thick*2, height*2, wallOpts), // Right
-        Bodies.rectangle(-thick, height/2, thick*2, height*2, wallOpts), // Left
-    ];
-    Composite.add(engine.world, walls);
-
-    // 3. 加载数据并生成球体
+export async function initSimulation(canvas, { onStateChange = () => {}, onSelect = () => {} } = {}) {
     const baseUrl = import.meta.env.BASE_URL;
-    const dataUrl = baseUrl.endsWith('/') ? `${baseUrl}members.json` : `${baseUrl}/members.json`;
-    
-    const res = await fetch(dataUrl);
-    const members = await res.json();
-    
-    const balls = members.map((m) => {
-        const radius = 35; // 头像半径
-        const x = Math.random() * (width - 100) + 50;
-        const y = Math.random() * (height - 100) + 50;
+    const response = await fetch(`${baseUrl}members.json`);
+    if (!response.ok) throw new Error(`成员数据加载失败（${response.status}）`);
+    const members = await response.json();
+    if (!Array.isArray(members)) throw new Error('成员数据格式有误');
 
-        const ball = Bodies.circle(x, y, radius, {
-            restitution: 0.9, // 弹性
-            frictionAir: 0.01,
-            plugin: {
-                // 将数据绑定到物理体上，供渲染和交互使用
-                userData: m,
-                image: null // 初始为空，加载完成后更新
-            }
+    const engine = Matter.Engine.create({ positionIterations: 8, velocityIterations: 8 });
+    engine.gravity.y = 0;
+    const bounds = canvas.getBoundingClientRect();
+    let width = Math.max(1, bounds.width);
+    let height = Math.max(1, bounds.height);
+    let mode = 'float';
+    let paused = false;
+    let gravity = false;
+    let destroyed = false;
+    let race = { phase: 'idle', countdown: 3, elapsed: 0, racers: [], obstacles: [], results: [], ranking: [], cameraMode: 'leader' };
+    let walls = createWalls(width, height);
+    Matter.Composite.add(engine.world, walls);
+
+    const initial = floatLayout(members.length, width, height);
+    const balls = members.map((member, index) => {
+        const ball = Matter.Bodies.circle(initial.positions[index].x, initial.positions[index].y, initial.radius, {
+            restitution: 0.9,
+            friction: 0.01,
+            frictionAir: 0.002,
+            plugin: { userData: member, image: null },
         });
-
-        // 异步加载图片，不阻塞物理世界生成
-        if (m.avatarUrl) {
-            const img = new Image();
-            if (!m.avatarUrl.startsWith('/') && !m.avatarUrl.startsWith('http')) {
-                 img.src = baseUrl + m.avatarUrl;
-            } else {
-                 img.src = m.avatarUrl;
-            }
-            img.onload = () => {
-                ball.plugin.image = img;
-            };
+        if (member.avatarUrl) {
+            const image = new Image();
+            image.onload = () => { if (!destroyed) ball.plugin.image = image; };
+            image.src = /^(?:https?:|data:|\/)/.test(member.avatarUrl) ? member.avatarUrl : `${baseUrl}${member.avatarUrl}`;
         }
-        
-        // 初始推力
-        Matter.Body.setVelocity(ball, {
-            x: (Math.random() - 0.5) * 10,
-            y: (Math.random() - 0.5) * 10
-        });
-
         return ball;
     });
+    Matter.Composite.add(engine.world, balls);
 
-    Composite.add(engine.world, balls);
+    const getState = () => ({ mode, width, height, paused, gravity, memberCount: members.length, race });
+    const publish = () => { if (!destroyed) onStateChange(getState()); };
+    const renderer = createCustomRenderer(engine, canvas, getState);
+    const interactions = setupInteractions(engine, canvas, {
+        getSize: () => ({ width, height }),
+        isInteractive: () => mode === 'float' && !paused,
+        onSelect,
+    });
 
-    // 4. 启动自定义渲染循环
-    createCustomRenderer(engine, canvas);
+    function scatter() {
+        interactions.cancel();
+        const layout = floatLayout(balls.length, width, height);
+        const slots = [...layout.positions];
+        for (let i = slots.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [slots[i], slots[j]] = [slots[j], slots[i]];
+        }
+        balls.forEach((ball, index) => {
+            setRadius(ball, layout.radius);
+            Matter.Body.setPosition(ball, slots[index]);
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 1.4;
+            Matter.Body.setVelocity(ball, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
+            Matter.Body.setAngularVelocity(ball, 0);
+            Matter.Body.setAngle(ball, 0);
+            containBody(ball, width, height);
+        });
+    }
 
-    // 5. 启动物理模拟 Runner
-    const runner = Runner.create();
-    Runner.run(runner, engine);
+    function resize() {
+        if (destroyed) return;
+        const rect = canvas.getBoundingClientRect();
+        const nextWidth = Math.max(1, rect.width);
+        const nextHeight = Math.max(1, rect.height);
+        interactions.cancel();
+        const previousWidth = width;
+        const previousHeight = height;
+        width = nextWidth;
+        height = nextHeight;
+        if (mode === 'race') {
+            layoutRace(race, width, height);
+        } else {
+            Matter.Composite.remove(engine.world, walls);
+            walls = createWalls(width, height);
+            Matter.Composite.add(engine.world, walls);
+            const { radius } = floatLayout(balls.length, width, height);
+            balls.forEach(ball => {
+                setRadius(ball, radius);
+                Matter.Body.setPosition(ball, {
+                    x: ball.position.x / previousWidth * width,
+                    y: ball.position.y / previousHeight * height,
+                });
+                containBody(ball, width, height);
+            });
+        }
+        renderer.resize(width, height);
+        publish();
+    }
 
-    // 6. 绑定交互 (点击事件)
-    setupInteractions(engine, canvas);
+    scatter();
+    renderer.resize(width, height);
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    window.addEventListener('resize', resize);
+    const fixedStep = 1000 / 120;
+    let previousTime = null;
+    let accumulator = 0;
+    let lastPublish = 0;
+    let animationFrame;
+    function frame(now) {
+        if (destroyed) return;
+        const elapsed = previousTime === null ? 0 : Math.min(64, now - previousTime);
+        previousTime = now;
+        if (!paused && !document.hidden) {
+            accumulator += elapsed;
+            while (accumulator >= fixedStep) {
+                if (mode === 'float') {
+                    balls.forEach(ball => containBody(ball, width, height));
+                    Matter.Engine.update(engine, fixedStep);
+                    balls.forEach(ball => containBody(ball, width, height));
+                } else {
+                    advanceRace(race, fixedStep / 1000);
+                }
+                accumulator -= fixedStep;
+            }
+            if (mode === 'race' && now - lastPublish >= 100) {
+                publish();
+                lastPublish = now;
+            }
+        } else accumulator = 0;
+        animationFrame = requestAnimationFrame(frame);
+    }
+    const resetClock = () => { previousTime = null; accumulator = 0; };
+    document.addEventListener('visibilitychange', resetClock);
+    animationFrame = requestAnimationFrame(frame);
+    publish();
+
+    function prepareRace() {
+        destroyRace(race);
+        Matter.Composite.remove(engine.world, walls);
+        race = createRace(engine, balls, width, height);
+    }
+
+    function setMode(nextMode) {
+        if (nextMode !== 'float' && nextMode !== 'race' || nextMode === mode) return;
+        interactions.cancel();
+        mode = nextMode;
+        paused = false;
+        resetClock();
+        if (mode === 'race') prepareRace();
+        else {
+            destroyRace(race);
+            race = { phase: 'idle', countdown: 3, elapsed: 0, racers: [], obstacles: [], results: [], ranking: [], cameraMode: 'leader' };
+            walls = createWalls(width, height);
+            Matter.Composite.add(engine.world, walls);
+            engine.gravity.y = gravity ? 0.8 : 0;
+            scatter();
+            Matter.Engine.clear(engine);
+        }
+        publish();
+    }
+
+    return {
+        getState,
+        getMembers: () => [...members],
+        setMode,
+        startRace() {
+            interactions.cancel();
+            mode = 'race';
+            paused = false;
+            prepareRace();
+            race.phase = balls.length ? 'countdown' : 'finished';
+            resetClock();
+            publish();
+        },
+        setCameraMode(value) {
+            if (mode !== 'race' || value !== 'leader' && value !== 'overview') return;
+            race.cameraMode = value;
+            if (value === 'leader') reframeCamera(race);
+            publish();
+        },
+        shuffle() {
+            if (mode !== 'float') return;
+            scatter();
+            publish();
+        },
+        setPaused(value) {
+            paused = Boolean(value);
+            interactions.cancel();
+            resetClock();
+            publish();
+        },
+        toggleGravity() {
+            if (mode !== 'float') return;
+            gravity = !gravity;
+            engine.gravity.y = gravity ? 0.8 : 0;
+            publish();
+        },
+        reset() {
+            interactions.cancel();
+            paused = false;
+            gravity = false;
+            if (mode === 'race') {
+                prepareRace();
+                race.phase = balls.length ? 'countdown' : 'finished';
+            } else {
+                engine.gravity.y = 0;
+                scatter();
+            }
+            resetClock();
+            publish();
+        },
+        destroy() {
+            destroyed = true;
+            cancelAnimationFrame(animationFrame);
+            observer.disconnect();
+            window.removeEventListener('resize', resize);
+            document.removeEventListener('visibilitychange', resetClock);
+            interactions.destroy();
+            renderer.destroy();
+            Matter.Composite.clear(engine.world, false);
+            Matter.Engine.clear(engine);
+        },
+    };
 }
