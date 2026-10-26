@@ -3,6 +3,8 @@ import { createCustomRenderer } from './render.js';
 import { setupInteractions } from './ui.js';
 import { containBody, createWalls, floatLayout, setRadius } from './physics.js';
 import { advanceRace, createRace, destroyRace, layoutRace, reframeCamera } from './race.js';
+import { advanceMerge, createMergeGame, destroyMerge } from './merge.js';
+import { setupMergeControls } from './merge-input.js';
 
 export async function initSimulation(canvas, { onStateChange = () => {}, onSelect = () => {} } = {}) {
     const baseUrl = import.meta.env.BASE_URL;
@@ -20,6 +22,11 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
     let paused = false;
     let gravity = false;
     let destroyed = false;
+    let merge = null;
+    let bestScore = 0;
+    try { bestScore = Math.max(0, Number(localStorage.getItem('source-merge-best')) || 0); } catch { /* Storage may be unavailable. */ }
+    if (!Number.isFinite(bestScore)) bestScore = 0;
+    const images = new Map();
     let race = { phase: 'idle', countdown: 3, elapsed: 0, racers: [], obstacles: [], results: [], ranking: [], cameraMode: 'leader' };
     let walls = createWalls(width, height);
     Matter.Composite.add(engine.world, walls);
@@ -34,6 +41,7 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
         });
         if (member.avatarUrl) {
             const image = new Image();
+            images.set(member.id, image);
             image.onload = () => { if (!destroyed) ball.plugin.image = image; };
             image.src = /^(?:https?:|data:|\/)/.test(member.avatarUrl) ? member.avatarUrl : `${baseUrl}${member.avatarUrl}`;
         }
@@ -41,13 +49,32 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
     });
     Matter.Composite.add(engine.world, balls);
 
-    const getState = () => ({ mode, width, height, paused, gravity, memberCount: members.length, race });
-    const publish = () => { if (!destroyed) onStateChange(getState()); };
+    const getState = () => ({ mode, width, height, paused, gravity, memberCount: members.length, race, merge });
+    const saveMergeBest = () => {
+        if (merge) {
+            if (merge.score > bestScore) {
+                bestScore = merge.score;
+                try { localStorage.setItem('source-merge-best', String(bestScore)); } catch { /* The round still works without storage. */ }
+            }
+            merge.bestScore = bestScore;
+        }
+    };
+    const publish = () => {
+        if (destroyed) return;
+        saveMergeBest();
+        onStateChange(getState());
+    };
     const renderer = createCustomRenderer(engine, canvas, getState);
     const interactions = setupInteractions(engine, canvas, {
         getSize: () => ({ width, height }),
         isInteractive: () => mode === 'float' && !paused,
         onSelect,
+    });
+    const mergeControls = setupMergeControls(canvas, {
+        getGame: () => merge,
+        getSize: () => ({ width, height }),
+        isInteractive: () => mode === 'merge' && !paused && merge?.phase === 'playing',
+        onChange: publish,
     });
 
     function scatter() {
@@ -76,13 +103,14 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
         const nextWidth = Math.max(1, rect.width);
         const nextHeight = Math.max(1, rect.height);
         interactions.cancel();
+        mergeControls.cancel();
         const previousWidth = width;
         const previousHeight = height;
         width = nextWidth;
         height = nextHeight;
         if (mode === 'race') {
             layoutRace(race, width, height);
-        } else {
+        } else if (mode === 'float') {
             Matter.Composite.remove(engine.world, walls);
             walls = createWalls(width, height);
             Matter.Composite.add(engine.world, walls);
@@ -121,12 +149,14 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
                     balls.forEach(ball => containBody(ball, width, height));
                     Matter.Engine.update(engine, fixedStep);
                     balls.forEach(ball => containBody(ball, width, height));
-                } else {
+                } else if (mode === 'race') {
                     advanceRace(race, fixedStep / 1000);
+                } else {
+                    advanceMerge(merge, fixedStep / 1000);
                 }
                 accumulator -= fixedStep;
             }
-            if (mode === 'race' && now - lastPublish >= 100) {
+            if (mode !== 'float' && now - lastPublish >= 100) {
                 publish();
                 lastPublish = now;
             }
@@ -139,21 +169,40 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
     publish();
 
     function prepareRace() {
+        saveMergeBest();
+        destroyMerge(merge);
+        merge = null;
         destroyRace(race);
         Matter.Composite.remove(engine.world, walls);
         race = createRace(engine, balls, width, height);
     }
 
+    function prepareMerge() {
+        saveMergeBest();
+        destroyMerge(merge);
+        destroyRace(race);
+        race = { phase: 'idle', countdown: 3, elapsed: 0, racers: [], obstacles: [], results: [], ranking: [], cameraMode: 'leader' };
+        Matter.Composite.remove(engine.world, walls);
+        merge = createMergeGame(members, { images });
+        merge.bestScore = bestScore;
+    }
+
     function setMode(nextMode) {
-        if (nextMode !== 'float' && nextMode !== 'race' || nextMode === mode) return;
+        if (!['float', 'race', 'merge'].includes(nextMode) || nextMode === mode) return;
         interactions.cancel();
+        mergeControls.cancel();
         mode = nextMode;
         paused = false;
         resetClock();
         if (mode === 'race') prepareRace();
+        else if (mode === 'merge') prepareMerge();
         else {
+            saveMergeBest();
+            destroyMerge(merge);
+            merge = null;
             destroyRace(race);
             race = { phase: 'idle', countdown: 3, elapsed: 0, racers: [], obstacles: [], results: [], ranking: [], cameraMode: 'leader' };
+            Matter.Composite.remove(engine.world, walls);
             walls = createWalls(width, height);
             Matter.Composite.add(engine.world, walls);
             engine.gravity.y = gravity ? 0.8 : 0;
@@ -169,10 +218,20 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
         setMode,
         startRace() {
             interactions.cancel();
+            mergeControls.cancel();
             mode = 'race';
             paused = false;
             prepareRace();
             race.phase = balls.length ? 'countdown' : 'finished';
+            resetClock();
+            publish();
+        },
+        startMerge() {
+            interactions.cancel();
+            mergeControls.cancel();
+            mode = 'merge';
+            paused = false;
+            prepareMerge();
             resetClock();
             publish();
         },
@@ -190,6 +249,7 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
         setPaused(value) {
             paused = Boolean(value);
             interactions.cancel();
+            mergeControls.cancel();
             resetClock();
             publish();
         },
@@ -201,11 +261,14 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
         },
         reset() {
             interactions.cancel();
+            mergeControls.cancel();
             paused = false;
             gravity = false;
             if (mode === 'race') {
                 prepareRace();
                 race.phase = balls.length ? 'countdown' : 'finished';
+            } else if (mode === 'merge') {
+                prepareMerge();
             } else {
                 engine.gravity.y = 0;
                 scatter();
@@ -214,12 +277,15 @@ export async function initSimulation(canvas, { onStateChange = () => {}, onSelec
             publish();
         },
         destroy() {
+            saveMergeBest();
             destroyed = true;
             cancelAnimationFrame(animationFrame);
             observer.disconnect();
             window.removeEventListener('resize', resize);
             document.removeEventListener('visibilitychange', resetClock);
             interactions.destroy();
+            mergeControls.destroy();
+            destroyMerge(merge);
             renderer.destroy();
             Matter.Composite.clear(engine.world, false);
             Matter.Engine.clear(engine);

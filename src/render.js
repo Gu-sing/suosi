@@ -1,4 +1,5 @@
 import Matter from 'matter-js';
+import { mergeView } from './merge-input.js';
 
 const COLORS = ['#0969da', '#1f883d', '#8250df', '#9a6700', '#bc4c00', '#0969da'];
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif';
@@ -310,12 +311,143 @@ export function createCustomRenderer(engine, canvas, getState) {
         }
     }
 
+    function drawMerge(state) {
+        const game = state.merge;
+        if (!game) return;
+        const view = mergeView(width, height);
+        const danger = game.dangerElapsed > 0;
+        ctx.save();
+        ctx.translate(view.offsetX, view.offsetY);
+        ctx.scale(view.scale, view.scale);
+        roundedRect(ctx, 0, 0, 420, 620, 12);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = '#e6ebf0';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        roundedRect(ctx, game.wallLeft, game.dangerLine, game.wallRight - game.wallLeft, game.floorY - game.dangerLine, 8);
+        ctx.fillStyle = danger ? '#fff5f3' : '#f8fbf9';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(game.wallLeft, game.dangerLine);
+        ctx.lineTo(game.wallLeft, game.floorY - 8);
+        ctx.quadraticCurveTo(game.wallLeft, game.floorY, game.wallLeft + 8, game.floorY);
+        ctx.lineTo(game.wallRight - 8, game.floorY);
+        ctx.quadraticCurveTo(game.wallRight, game.floorY, game.wallRight, game.floorY - 8);
+        ctx.lineTo(game.wallRight, game.dangerLine);
+        ctx.strokeStyle = '#82b994';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.setLineDash([6, 6]);
+        ctx.moveTo(game.wallLeft + 2, game.dangerLine);
+        ctx.lineTo(game.wallRight - 2, game.dangerLine);
+        ctx.strokeStyle = danger ? '#cf222e' : '#d4a72c';
+        ctx.lineWidth = danger ? 2 : 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = danger ? '#cf222e' : '#9a6700';
+        ctx.font = `500 11px ${FONT}`;
+        ctx.textAlign = 'right';
+        ctx.fillText(danger ? `即将满出 · ${Math.max(0, game.dangerDuration - game.dangerElapsed).toFixed(1)} s` : '警戒线', game.wallRight - 7, game.dangerLine + 18);
+        if (game.phase === 'playing' && game.levels.length) {
+            const radius = game.levels[game.currentLevel].radius;
+            let targetY = game.floorY;
+            for (const body of game.bodies) {
+                const dx = Math.abs(body.position.x - game.aimX);
+                const combinedRadius = body.circleRadius + radius;
+                if (dx < combinedRadius) targetY = Math.min(targetY, body.position.y - Math.sqrt(combinedRadius ** 2 - dx ** 2));
+            }
+            ctx.beginPath();
+            ctx.moveTo(game.aimX, game.spawnY + radius + 7);
+            ctx.lineTo(game.aimX, Math.max(game.spawnY + radius + 7, targetY));
+            ctx.setLineDash([3, 6]);
+            ctx.strokeStyle = '#82b994';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            if (!game.bodies.length) {
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#1f883d';
+                ctx.font = `600 18px ${FONT}`;
+                ctx.fillText('从一个小头像开始', 210, 290);
+                ctx.fillStyle = '#59636e';
+                ctx.font = `12px ${FONT}`;
+                ctx.fillText('移动瞄准，点击或松手投下', 210, 318);
+                ctx.fillText('两个相同头像相碰，就会变大', 210, 340);
+            }
+        }
+        ctx.restore();
+
+        const drawMergeAvatar = (body, level, preview = false) => {
+            const x = view.x(body.position.x);
+            const y = view.y(body.position.y);
+            const radius = body.circleRadius * view.scale;
+            ctx.save();
+            if (preview && game.cooldown > 0) ctx.globalAlpha = 0.45;
+            drawAvatar(body, level, x, y, radius, { labels: false });
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = level === game.levels.length - 1 ? '#1f883d' : '#8cbca0';
+            ctx.lineWidth = Math.max(1, (level === game.levels.length - 1 ? 3 : 1.5) * view.scale);
+            ctx.stroke();
+            if (radius >= 12) {
+                const badgeRadius = Math.min(10, radius * 0.4);
+                ctx.beginPath();
+                ctx.arc(x, y + radius - badgeRadius * 0.6, badgeRadius, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.font = `600 ${Math.max(8, badgeRadius)}px ${FONT}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#116329';
+                ctx.fillText(String(level + 1), x, y + radius - badgeRadius * 0.6);
+            }
+            ctx.restore();
+        };
+        for (const body of game.bodies) drawMergeAvatar(body, body.plugin.mergeLevel);
+        if (game.phase === 'playing' && game.levels.length) {
+            const level = game.levels[game.currentLevel];
+            drawMergeAvatar({ position: { x: game.aimX, y: game.spawnY }, circleRadius: level.radius, angle: 0, plugin: { userData: level.member, image: level.image } }, game.currentLevel, true);
+        }
+        for (const effect of game.effects) {
+            const progress = Math.min(1, effect.age / 0.6);
+            ctx.save();
+            ctx.globalAlpha = 1 - progress;
+            ctx.beginPath();
+            ctx.arc(view.x(effect.x), view.y(effect.y), effect.radius * view.scale * (1 + progress * 0.45), 0, Math.PI * 2);
+            ctx.strokeStyle = '#4aa568';
+            ctx.lineWidth = 3 * (1 - progress) * view.scale;
+            ctx.stroke();
+            ctx.font = `600 ${16 * view.scale}px ${FONT}`;
+            ctx.fillStyle = '#116329';
+            ctx.textAlign = 'center';
+            ctx.fillText(`+${effect.points}`, view.x(effect.x), view.y(effect.y - effect.radius - progress * 30));
+            ctx.restore();
+        }
+        if (game.phase === 'over' || state.paused) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.84)';
+            roundedRect(ctx, view.x(40), view.y(245), 340 * view.scale, 100 * view.scale, 10);
+            ctx.fill();
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#1f2328';
+            ctx.font = `600 ${22 * view.scale}px ${FONT}`;
+            ctx.fillText(state.paused ? '已暂停' : '本局结束', view.x(210), view.y(285));
+            ctx.font = `${13 * view.scale}px ${FONT}`;
+            ctx.fillStyle = '#59636e';
+            ctx.fillText(state.paused ? '点击播放按钮继续合成' : `获得 ${game.score} 分 · 再开一局，换一组新朋友`, view.x(210), view.y(317));
+            ctx.restore();
+        }
+    }
+
     function draw() {
         if (destroyed) return;
         if (pixelRatio !== Math.min(window.devicePixelRatio || 1, 2)) resize(width, height);
         const state = getState();
         background();
         if (state.mode === 'race') drawRace(state);
+        else if (state.mode === 'merge') drawMerge(state);
         else {
             drawGrid();
             const bodies = Matter.Composite.allBodies(engine.world).filter(body => body.circleRadius && body.plugin.userData);
