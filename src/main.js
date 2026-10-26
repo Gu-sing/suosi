@@ -13,6 +13,7 @@ const paths = {
   flag: '<path d="M5 21V3m0 1c5-5 9 5 14 0v10c-5 5-9-5-14 0"/>',
   close: '<path d="m6 6 12 12M6 18 18 6"/>',
   view: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h8"/>',
+  merge: '<circle cx="6" cy="7" r="3"/><circle cx="17" cy="6" r="4"/><path d="m7 13 3 3m7-3-3 3"/><circle cx="12" cy="19" r="3"/>',
 };
 const icon = (name) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
 
@@ -43,11 +44,14 @@ document.querySelector('#app').innerHTML = `
                 <button class="button button-small" id="camera" aria-pressed="false" hidden>${icon('view')}<span>查看全程</span></button>
                 <button class="button icon-button" id="pause" title="暂停动画" aria-label="暂停动画" aria-pressed="false" disabled>${icon('pause')}</button>
                 <button class="button icon-button" id="reset" title="重新排列" aria-label="重新排列" disabled>${icon('reset')}</button>
-                <button class="button button-primary button-small" id="start-race" disabled>${icon('flag')}<span>开始下落赛</span></button><button class="button button-small" id="exit-race" hidden>结束比赛</button>
+                <button class="button button-primary button-small" id="start-race" disabled>${icon('flag')}<span>开始下落赛</span></button><button class="button button-small" id="start-merge" disabled>${icon('merge')}<span>合成大西瓜</span></button><button class="button button-small" id="exit-race" hidden>结束比赛</button>
               </div>
             </div>
+            <div class="merge-hud" id="merge-hud" hidden><div class="merge-stat"><span>本局得分</span><strong id="merge-score">0</strong></div><div class="merge-stat"><span>本机最高</span><strong id="merge-best-score">0</strong></div><div class="merge-next"><div id="merge-next-avatar"></div><div><span>下一个</span><strong id="merge-next-name">—</strong></div></div></div>
+            <div class="merge-over" id="merge-over" hidden><div><strong>这一局装满啦</strong><p id="merge-over-score"></p></div><button class="button button-primary" id="merge-restart">换一组头像再来</button></div>
             <div class="canvas-wrap" id="canvas-wrap"><canvas id="world" aria-label="可拖拽的成员头像，也可通过查看所有成员按钮查看资料。"></canvas><div class="stage-message" id="stage-message" role="status">正在加载成员…</div></div>
             <div class="arena-footer"><span id="play-hint">拖动头像让它们碰撞，点击头像认识新朋友。</span><span id="race-clock" hidden>00.00 s</span><span id="arena-note">自由碰撞</span></div>
+            <section class="merge-progress" id="merge-progress" aria-labelledby="merge-levels-title" hidden><div class="results-heading"><h3 id="merge-levels-title">本局合成路线</h3><span id="merge-summary">小头像 → 大西瓜</span></div><ol class="merge-levels" id="merge-levels" aria-label="头像从小到大的合成顺序"></ol></section>
             <section class="race-results" id="race-results" aria-labelledby="results-title" hidden><div class="results-heading"><h3 id="results-title">实时排名</h3><span id="race-summary">等待出发</span></div><ol class="leaderboard" id="leaderboard"></ol></section>
             <p class="sr-only" id="race-announcement" role="status" aria-live="polite"></p>
           </section>
@@ -55,7 +59,7 @@ document.querySelector('#app').innerHTML = `
         </div>
         <aside class="info-sidebar" aria-label="参与方式和玩法说明">
           <section class="info-card"><h2>加入 Source of USTB</h2><p>无需准备完美的作品。从一次提交开始，和大家一起学习、分享、创造。</p><ol class="join-steps"><li>Fork 项目仓库</li><li>添加头像和自我介绍</li><li>提交 Pull Request</li></ol><a class="button button-dark" href="${repo}/blob/master/docs/gitHowTo.md">查看参与指南</a></section>
-          <section class="info-card"><h2 id="instructions-title">试着和大家碰个面</h2><div id="float-help"><p>拖动小球，让头像相互碰撞；点击头像，看看朋友们的介绍。</p><p>也可以开启重力，或者发起一场下落赛。</p></div><div id="race-help" hidden><p>所有头像从同一片起跑区出发，沿长赛道自由下落。</p><p>弹柱、斜坡和旋转挡板会改变小球的方向。最先抵达底部终点的成员获胜。</p><p>镜头自动跟随领先者，也可以切换全程视角。</p></div></section>
+          <section class="info-card"><h2 id="instructions-title">试着和大家碰个面</h2><div id="float-help"><p>拖动小球，让头像相互碰撞；点击头像，看看朋友们的介绍。</p><p>也可以开启重力、发起下落赛，或试试合成大西瓜。</p></div><div id="race-help" hidden><p>所有头像从同一片起跑区出发，沿长赛道自由下落。</p><p>弹柱、斜坡和旋转挡板会改变小球的方向。最先抵达底部终点的成员获胜。</p><p>镜头自动跟随领先者，也可以切换全程视角。</p></div><div id="merge-help" hidden><p>每局随机挑选一组成员头像，组成从小到大的合成路线。两个相同头像碰到一起，就会合成下一级。</p><p>移动鼠标后点击投放；手机上拖动瞄准、松手投放。也可以聚焦画布，按 ← → 移动，空格或 Enter 投放。</p><p>堆积的头像持续超过虚线，本局结束。试着合成路线最后的「大西瓜」！最大头像会保留，可以继续挑战高分。</p></div></section>
           <section class="info-card community-note"><h2>Learn. Collaborate. Grow.</h2><p>保持好奇，分享所学。<br>下一次有趣的尝试，就从这里开始。</p><a href="${repo}">查看开源项目 ${icon('arrow')}</a></section>
         </aside>
       </main>
@@ -72,6 +76,70 @@ let simulation;
 let previousAnnouncement = '';
 let leaderboardOrder = '';
 const leaderboardRows = new Map();
+let displayedMergeLevels = null;
+let displayedNextLevel = null;
+
+function mergeAvatar(member) {
+  const avatar = document.createElement('span');
+  avatar.className = 'merge-avatar';
+  avatar.textContent = Array.from(member.name || member.id || '?')[0].toUpperCase();
+  const url = assetUrl(member.avatarUrl);
+  if (url) {
+    const image = document.createElement('img');
+    image.alt = ''; image.src = url;
+    image.onerror = () => image.remove();
+    avatar.append(image);
+  }
+  return avatar;
+}
+
+function updateMerge(state) {
+  const game = state.merge;
+  if (!game) return;
+  const over = game.phase === 'over';
+  const reached = game.levels[game.bestLevel];
+  $('#merge-score').textContent = game.score;
+  $('#merge-best-score').textContent = game.bestScore || 0;
+  $('#merge-over').hidden = !over;
+  $('#merge-over-score').textContent = `本局 ${game.score} 分 · 最高到达第 ${game.bestLevel + 1} 级`;
+  $('#merge-summary').textContent = game.bestLevel === game.levels.length - 1 ? '已合成大西瓜！继续挑战高分' : `最高第 ${game.bestLevel + 1} 级 / 共 ${game.levels.length} 级`;
+  if (displayedMergeLevels !== game.levels) {
+    displayedMergeLevels = game.levels;
+    displayedNextLevel = null;
+    $('#merge-levels').replaceChildren(...game.levels.map(({ member }, index) => {
+      const row = document.createElement('li');
+      const avatar = mergeAvatar(member);
+      avatar.style.setProperty('--avatar-size', `${22 + index / Math.max(1, game.levels.length - 1) * 22}px`);
+      const name = member.name || member.id || 'Source';
+      const label = document.createElement('span');
+      label.className = 'merge-level-label';
+      label.textContent = index === game.levels.length - 1 ? '大西瓜' : String(index + 1);
+      row.title = `第 ${index + 1} 级：${name}${index === game.levels.length - 1 ? '（大西瓜）' : ''}`;
+      row.setAttribute('aria-label', row.title);
+      row.append(avatar, label);
+      return row;
+    }));
+  }
+  [...$('#merge-levels').children].forEach((row, index) => {
+    row.classList.toggle('is-reached', index <= game.bestLevel);
+    row.classList.toggle('is-current', index === game.bestLevel);
+    if (index === game.bestLevel) row.setAttribute('aria-current', 'step');
+    else row.removeAttribute('aria-current');
+  });
+  if (displayedNextLevel !== game.nextLevel) {
+    displayedNextLevel = game.nextLevel;
+    const next = game.levels[game.nextLevel];
+    $('#merge-next-avatar').replaceChildren(...(next ? [mergeAvatar(next.member)] : []));
+    $('#merge-next-name').textContent = next ? `${next.member.name || next.member.id} · ${game.nextLevel + 1} 级` : '—';
+  }
+  $('#play-hint').textContent = over ? '本局结束，换一组头像再挑战一次。' : state.paused ? '已暂停，点击播放按钮继续。' : '点击投放 · 拖动瞄准后松手 · ← → 移动 / 空格投放';
+  $('#arena-note').textContent = '相同头像 → 更大一级';
+  const announcementKey = `merge:${game.phase}:${state.paused}:${game.bestLevel}`;
+  if (announcementKey !== previousAnnouncement) {
+    $('#race-announcement').textContent = over ? `本局结束，得分 ${game.score}，最高第 ${game.bestLevel + 1} 级。` : state.paused ? '合成游戏已暂停。' : reached ? `已到达第 ${game.bestLevel + 1} 级，${reached.member.name || reached.member.id}。` : '合成游戏开始。';
+    previousAnnouncement = announcementKey;
+  }
+}
 
 function updateLeaderboard(ranking, phase) {
   const order = ranking.map((entry) => entry.id).join('|');
@@ -98,34 +166,54 @@ function updateLeaderboard(ranking, phase) {
 
 function updateState(state) {
   const racing = state.mode === 'race';
+  const merging = state.mode === 'merge';
   $('#member-count').textContent = state.memberCount;
   $('#sidebar-member-count').textContent = state.memberCount;
-  $('#float-help').hidden = racing;
+  $('#float-help').hidden = racing || merging;
   $('#race-help').hidden = !racing;
-  $('#instructions-title').textContent = racing ? '关于下落赛' : '试着和大家碰个面';
-  $('#arena-title').textContent = racing ? '重力下落赛' : '成员墙';
-  $('#float-tools').hidden = racing;
+  $('#merge-help').hidden = !merging;
+  $('#instructions-title').textContent = merging ? '来合成一颗大西瓜' : racing ? '关于下落赛' : '试着和大家碰个面';
+  $('#arena-title').textContent = merging ? '合成大西瓜' : racing ? '重力下落赛' : '成员墙';
+  $('#float-tools').hidden = racing || merging;
   $('#camera').hidden = !racing;
-  $('#exit-race').hidden = !racing;
-  $('#reset').hidden = racing;
+  $('#exit-race').hidden = !racing && !merging;
+  $('#exit-race').textContent = merging ? '返回成员墙' : '结束比赛';
+  $('#reset').hidden = racing || merging;
+  $('#start-race').hidden = merging;
+  $('#start-merge').disabled = state.memberCount === 0;
+  $('#start-merge span').textContent = merging ? '重新开局' : '合成大西瓜';
+  $('#start-merge').classList.toggle('button-primary', merging);
+  $('#merge-hud').hidden = !merging;
+  $('#merge-progress').hidden = !merging;
+  if (!merging) $('#merge-over').hidden = true;
   $('#race-results').hidden = !racing;
   $('#race-status').hidden = !racing;
   $('#race-clock').hidden = !racing;
   $('#arena-note').hidden = racing;
   $('#canvas-wrap').classList.toggle('race-mode', racing);
+  $('#canvas-wrap').classList.toggle('merge-mode', merging);
   $('#world').classList.toggle('is-paused', state.paused);
-  $('#world').style.touchAction = racing || state.paused ? 'pan-y' : 'none';
-  $('#world').setAttribute('aria-label', racing ? '头像沿长赛道受重力下落，与障碍发生碰撞；可查看全程，排名显示在画布下方。' : '可拖拽的成员头像，也可通过查看所有成员按钮查看资料。');
+  $('#world').style.touchAction = racing || state.paused || merging && state.merge?.phase === 'over' ? 'pan-y' : 'none';
+  if (merging) $('#world').setAttribute('tabindex', '0');
+  else $('#world').removeAttribute('tabindex');
+  $('#world').setAttribute('aria-label', merging ? '合成大西瓜。点击或拖动后松手投放头像；左右方向键瞄准，空格或 Enter 投放；相同头像碰撞会合成更大一级。' : racing ? '头像沿长赛道受重力下落，与障碍发生碰撞；可查看全程，排名显示在画布下方。' : '可拖拽的成员头像，也可通过查看所有成员按钮查看资料。');
   $('#gravity').setAttribute('aria-pressed', state.gravity);
   $('#gravity').title = state.gravity ? '关闭重力' : '开启重力';
   const pauseLabel = state.paused ? '继续动画' : '暂停动画';
   if ($('#pause').title !== pauseLabel) $('#pause').innerHTML = icon(state.paused ? 'play' : 'pause');
   $('#pause').title = pauseLabel; $('#pause').setAttribute('aria-label', pauseLabel); $('#pause').setAttribute('aria-pressed', state.paused);
+  $('#pause').disabled = state.memberCount === 0 || merging && state.merge?.phase === 'over';
+  if (merging) {
+    updateMerge(state);
+    return;
+  }
   if (!racing) {
     $('#start-race').disabled = state.memberCount === 0;
     $('#start-race span').textContent = '开始下落赛';
     $('#play-hint').textContent = state.paused ? '已暂停，点击播放按钮继续。' : '拖动头像让它们碰撞，点击头像认识新朋友。';
+    $('#arena-note').textContent = '自由碰撞';
     previousAnnouncement = '';
+    $('#race-announcement').textContent = '';
     return;
   }
   const { phase, countdown, elapsed, cameraMode, ranking = [], results = [] } = state.race;
@@ -155,6 +243,14 @@ $('#start-race').addEventListener('click', () => {
   simulation?.startRace();
   $('#playground').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
 });
+function startMerge() {
+  previousAnnouncement = '';
+  simulation?.startMerge();
+  $('#world').focus({ preventScroll: true });
+  $('#playground').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+}
+$('#start-merge').addEventListener('click', startMerge);
+$('#merge-restart').addEventListener('click', startMerge);
 $('#exit-race').addEventListener('click', () => simulation?.setMode('float'));
 $('#camera').addEventListener('click', () => simulation?.setCameraMode(simulation.getState().race.cameraMode === 'overview' ? 'leader' : 'overview'));
 function setupDirectory(members) {
@@ -216,7 +312,7 @@ async function boot() {
   try {
     simulation = await initSimulation($('#world'), { onStateChange: updateState, onSelect: (member) => memberModal.open(member) });
     $('#stage-message').hidden = true;
-    ['shuffle', 'gravity', 'pause', 'reset', 'start-race', 'show-members'].forEach((id) => { $(`#${id}`).disabled = false; });
+    ['shuffle', 'gravity', 'pause', 'reset', 'start-race', 'start-merge', 'show-members'].forEach((id) => { $(`#${id}`).disabled = false; });
     setupDirectory(simulation.getMembers()); updateState(simulation.getState());
     if (!simulation.getState().memberCount) {
       $('#stage-message').textContent = '还没有成员，提交第一个 PR 加入我们。';
